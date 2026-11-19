@@ -1,51 +1,50 @@
 # WaterFlow Firmware
 
-Firmware for the ESP32-S3 water flow monitor built by team **ครูบาช่วยด้วย**.
-The board measures water flow with a YF-S201 sensor, shows it on a 0.96" OLED, sends telemetry to ThingsBoard Cloud over MQTT, and raises a LINE alert through the Dormitory Maintenance Reporting System when water keeps flowing for too long.
+เฟิร์มแวร์ของอุปกรณ์วัดการใช้น้ำ ESP32-S3 โดยทีม **ครูบาช่วยด้วย**
+บอร์ดวัดอัตราการไหลของน้ำด้วยเซนเซอร์ YF-S201 แสดงผลบนจอ OLED 0.96" ส่งข้อมูลขึ้น ThingsBoard Cloud ผ่าน MQTT และแจ้งเตือนทาง LINE ผ่านระบบแจ้งซ่อมหอพักเมื่อน้ำไหลต่อเนื่องนานเกินกำหนด
 
-Related repositories:
-- Dashboard and alert service: https://github.com/Toey2706/WaterFlow-Dashboard
-- Dormitory Maintenance Reporting System (app, LINE bot, backend): https://github.com/Toey2706/Dorm-care
+repo ที่เกี่ยวข้อง
+- แอป ระบบแจ้งเตือน และ LINE bot: https://github.com/Toey2706/Dorm-care
 
-## Hardware
+## ฮาร์ดแวร์
 
-| Part | ESP32-S3 pin |
+| ส่วน | ขา ESP32-S3 |
 |---|---|
 | ESP32-S3-WROOM-1-N16R8 | - |
-| YF-S201 flow sensor (connector P1, level shifting with R6, R14, Q1) | GPIO7 |
-| OLED 0.96" I2C (U7) | SDA GPIO16, SCL GPIO15 |
-| RGB LED 5050 (LED1, common anode to 3.3V) | GPIO4, GPIO5, GPIO6 |
-| BOOT button | GPIO0 |
+| เซนเซอร์น้ำ YF-S201 (คอนเนกเตอร์ P1 ปรับระดับสัญญาณด้วย R6, R14, Q1) | GPIO7 |
+| จอ OLED 0.96" I2C (U7) | SDA GPIO16, SCL GPIO15 |
+| LED RGB 5050 (LED1 แบบ common anode ต่อ 3.3V) | GPIO4, GPIO5, GPIO6 |
+| ปุ่ม BOOT | GPIO0 |
 
-LED1 does not light on the first assembled board. The firmware drives it, the fault is in the assembly and is still open.
+LED1 บนบอร์ดตัวแรกที่ประกอบยังไม่ติด เฟิร์มแวร์สั่งงานขาแล้ว ปัญหาอยู่ที่การประกอบ ยังไม่ได้แก้
 
-## What it does
+## การทำงาน
 
-- Counts sensor pulses on GPIO7 with an interrupt, ignoring pulses closer than 2 ms (the YF-S201 cannot go that fast, so they are noise).
-- Every second: flow rate = pulses / 7.5 (L/min), total = pulses / 450 (L).
-- Shows flow, total and state (FLOWING, idle, LEAK?) on the OLED, plus connection state in the corner.
-- Saves the total to flash every 10 seconds when it changes. Hold BOOT for 3 seconds to reset it.
-- Publishes `flow_lpm`, `total_l`, `flowing`, `rssi`, `flow_seconds`, `leak` to `v1/devices/me/telemetry` every 5 seconds, and immediately when flow starts or stops.
-- Accepts ThingsBoard RPC `resetTotal` and `testAlert`.
-- When water flows continuously for `LEAK_SECONDS` (default 600), it calls the `water-alert` function once. That function sends a LINE card to residents bound to `DEVICE_ROOM` and an Android push to dorm admins. It does not create a repair ticket.
+- นับพัลส์จากเซนเซอร์ที่ GPIO7 ด้วย interrupt ตัดพัลส์ที่ห่างกันไม่ถึง 2 ms ทิ้ง เพราะ YF-S201 ส่งเร็วขนาดนั้นไม่ได้ จึงเป็นสัญญาณรบกวน
+- ทุก 1 วินาที คำนวณอัตราไหล = พัลส์ ÷ 7.5 (L/min) และปริมาณรวม = พัลส์ ÷ 450 (L)
+- จอ OLED แสดงอัตราไหล ปริมาณรวม สถานะ (FLOWING, idle, LEAK?) และสถานะการเชื่อมต่อที่มุมจอ
+- บันทึกปริมาณรวมลงหน่วยความจำถาวรทุก 10 วินาทีเมื่อค่าเปลี่ยน กดปุ่ม BOOT ค้าง 3 วินาทีเพื่อล้างค่า
+- ส่ง `flow_lpm`, `total_l`, `flowing`, `rssi`, `flow_seconds`, `leak` ไปที่ `v1/devices/me/telemetry` ทุก 5 วินาที และส่งทันทีเมื่อน้ำเริ่มไหลหรือหยุดไหล
+- รับคำสั่ง RPC จาก ThingsBoard คือ `resetTotal` และ `testAlert`
+- เมื่อน้ำไหลต่อเนื่องครบ `LEAK_SECONDS` (ค่าเริ่มต้น 600 วินาที) จะเรียกฟังก์ชัน `water-alert` หนึ่งครั้ง ฟังก์ชันนี้ส่งการ์ดเตือนทาง LINE ถึงผู้พักที่ผูกห้อง `DEVICE_ROOM` ส่งแจ้งเตือนเข้าแอป Android ของผู้ดูแล และบันทึกลงแท็บน้ำในแอป ระบบไม่สร้างใบแจ้งซ่อมเอง
 
-## Build
+## วิธี build
 
-1. Install VS Code with the PlatformIO extension.
-2. Copy `include/secrets.example.h` to `include/secrets.h` and fill in Wi-Fi (2.4 GHz only), the ThingsBoard device access token and the device key that matches the `WATER_DEVICE_KEY` secret in Supabase. `secrets.h` is ignored by git.
-3. Set the room and leak threshold in `include/config.h`.
-4. Keep the project in a folder whose path has no Thai characters, the ESP32 toolchain cannot read it.
-5. Upload. If the port is busy, close the serial monitor, or hold BOOT, press RESET, release BOOT, then upload.
+1. ติดตั้ง VS Code และส่วนขยาย PlatformIO
+2. คัดลอก `include/secrets.example.h` เป็น `include/secrets.h` แล้วกรอก Wi-Fi (ใช้ได้เฉพาะ 2.4 GHz), access token ของอุปกรณ์ใน ThingsBoard และคีย์อุปกรณ์ที่ตรงกับ secret `WATER_DEVICE_KEY` ใน Supabase ไฟล์ `secrets.h` ไม่ถูกเก็บใน git
+3. ตั้งเลขห้องและเวลาที่ถือว่าน้ำรั่วใน `include/config.h`
+4. เก็บโปรเจกต์ไว้ในโฟลเดอร์ที่ path ไม่มีตัวอักษรไทย เพราะ toolchain ของ ESP32 อ่านไม่ได้
+5. กด Upload ถ้าพอร์ตไม่ว่าง ให้ปิด Serial Monitor ก่อน หรือกด BOOT ค้าง กด RESET แล้วปล่อย BOOT จากนั้น upload ใหม่
 
-## Serial output
+## ข้อความใน Serial Monitor
 
 ```
 พัลส์/วินาที=0  อัตราไหล=0.00 L/min  รวม=0.000 L  wifi=3 mqtt=0
 ```
 
-`wifi=3 mqtt=0` means connected to ThingsBoard. `mqtt=5` is a wrong token, `mqtt=-2` means the server cannot be reached, `wifi=1` means the network was not found (often a 5 GHz network).
+`wifi=3 mqtt=0` แปลว่าเชื่อมต่อ ThingsBoard แล้ว `mqtt=5` คือ token ผิด `mqtt=-2` คือติดต่อเซิร์ฟเวอร์ไม่ได้ `wifi=1` คือหาเครือข่ายไม่เจอ ส่วนใหญ่เกิดจากเป็นเครือข่าย 5 GHz
 
-## Known limitations
+## ข้อจำกัดที่รู้อยู่
 
-- TLS to the alert service skips certificate checking (`setInsecure`). Fine for the prototype, not for production.
-- Flow accuracy has not been calibrated against a known volume of water yet.
+- การเชื่อมต่อ TLS ไปที่ระบบแจ้งเตือนข้ามการตรวจใบรับรอง (`setInsecure`) ใช้ได้กับต้นแบบ แต่ไม่เหมาะกับการใช้งานจริง
+- ยังไม่ได้เทียบความแม่นยำของการวัดกับปริมาณน้ำจริง
