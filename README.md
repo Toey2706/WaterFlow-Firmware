@@ -1,6 +1,6 @@
 # WaterFlow Firmware
 
-Firmware for the ESP32-S3 water flow monitor built by team **OneNight Miracle**.
+Firmware for the ESP32-S3 water flow monitor built by team **ครูบาช่วยด้วย**.
 The board measures water flow with a YF-S201 sensor, shows it on a 0.96" OLED, sends telemetry to ThingsBoard Cloud over MQTT, and raises a LINE alert through the Dormitory Maintenance Reporting System when water keeps flowing for too long.
 
 Related repositories:
