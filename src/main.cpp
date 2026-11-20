@@ -27,7 +27,7 @@ const bool netEnabled = strlen(WIFI_SSID) > 0 && strlen(TB_TOKEN) > 0;
 float lastLpm = 0;
 uint32_t flowSeconds = 0;
 uint32_t idleSeconds = 0;
-bool leakSent = false;
+uint32_t nextAlertAt = ALERT_STEP_SECONDS;
 bool testAlertPending = false;
 
 volatile uint32_t lastPulseUs = 0;
@@ -55,20 +55,22 @@ void setLed(bool r, bool g, bool b) {
   ledWrite(PIN_LED_B, b);
 }
 
-bool sendAlert(uint32_t minutes, float lpm, float liters) {
-  if (WiFi.status() != WL_CONNECTED) return false;
+int sendAlert(uint32_t minutes, float lpm, float liters, bool test) {
+  if (WiFi.status() != WL_CONNECTED) return 0;
   WiFiClientSecure tls;
   tls.setInsecure();
   HTTPClient http;
-  if (!http.begin(tls, ALERT_URL)) return false;
+  if (!http.begin(tls, ALERT_URL)) return 0;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-key", WATER_DEVICE_KEY);
   String json = "{\"room\":\"" + String(DEVICE_ROOM) + "\",\"minutes\":" + String(minutes) +
-                ",\"flow_lpm\":" + String(lpm, 2) + ",\"total_l\":" + String(liters, 1) + "}";
+                ",\"flow_lpm\":" + String(lpm, 2) + ",\"total_l\":" + String(liters, 1) +
+                (test ? ",\"test\":true}" : "}");
   int code = http.POST(json);
+  String resp = code > 0 ? http.getString() : "";
   http.end();
-  out("แจ้งเตือนน้ำรั่ว: ส่งแล้ว HTTP " + String(code));
-  return code == 200;
+  out("แจ้งเตือนน้ำ " + String(minutes) + " นาที: HTTP " + String(code) + (resp.indexOf("\"skipped\":true") >= 0 ? " (ยังไม่ถึงเวลาที่ตั้งไว้)" : ""));
+  return code;
 }
 
 void resetTotal() {
@@ -234,13 +236,13 @@ void loop() {
   } else if (flowSeconds > 0 && ++idleSeconds > FLOW_GAP_SECONDS) {
     flowSeconds = 0;
     idleSeconds = 0;
-    leakSent = false;
+    nextAlertAt = ALERT_STEP_SECONDS;
   }
   bool leak = flowSeconds >= LEAK_SECONDS;
-  if (leak && !leakSent) leakSent = sendAlert(flowSeconds / 60, lpm, liters);
+  if (flowSeconds >= nextAlertAt && sendAlert(nextAlertAt / 60, lpm, liters, false) > 0) nextAlertAt += ALERT_STEP_SECONDS;
   if (testAlertPending) {
     testAlertPending = false;
-    sendAlert(flowSeconds / 60, lpm, liters);
+    sendAlert(flowSeconds / 60, lpm, liters, true);
   }
 
   setLed(leak, n > 0 && !leak, n == 0);
