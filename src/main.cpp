@@ -19,6 +19,7 @@ static const float PULSES_PER_LITER = 450.0f;
 volatile uint32_t pulses = 0;
 uint32_t totalPulses = 0;
 uint32_t savedPulses = 0;
+uint32_t unsentPulses = 0;
 Preferences store;
 
 WiFiClient net;
@@ -124,9 +125,11 @@ void netLoop() {
 
 void sendTelemetry(float lpm, float liters, bool flowing) {
   if (!mqtt.connected()) return;
+  uint32_t used = unsentPulses;
   String json = "{\"flow_lpm\":" + String(lpm, 2) + ",\"total_l\":" + String(liters, 3) +
-                ",\"flowing\":" + String(flowing ? "true" : "false") + ",\"rssi\":" + String(WiFi.RSSI()) + ",\"flow_seconds\":" + String(flowSeconds) + ",\"leak\":" + String(flowSeconds >= LEAK_SECONDS ? "true" : "false") + "}";
-  mqtt.publish("v1/devices/me/telemetry", json.c_str());
+                ",\"flowing\":" + String(flowing ? "true" : "false") + ",\"rssi\":" + String(WiFi.RSSI()) + ",\"flow_seconds\":" + String(flowSeconds) + ",\"leak\":" + String(flowSeconds >= LEAK_SECONDS ? "true" : "false") +
+                (used ? ",\"used_l\":" + String(used / PULSES_PER_LITER, 4) : "") + "}";
+  if (mqtt.publish("v1/devices/me/telemetry", json.c_str())) unsentPulses -= used;
 }
 
 void scanI2C() {
@@ -214,6 +217,7 @@ void loop() {
   pulses = 0;
   interrupts();
   totalPulses += n;
+  unsentPulses += n;
 
   static uint8_t tick = 0;
   if (++tick >= 10) {
