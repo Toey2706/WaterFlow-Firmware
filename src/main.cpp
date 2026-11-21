@@ -66,7 +66,7 @@ int sendAlert(uint32_t minutes, float lpm, float liters, bool test) {
   http.addHeader("x-device-key", WATER_DEVICE_KEY);
   String json = "{\"room\":\"" + String(DEVICE_ROOM) + "\",\"minutes\":" + String(minutes) +
                 ",\"flow_lpm\":" + String(lpm, 2) + ",\"total_l\":" + String(liters, 1) +
-                (test ? ",\"test\":true}" : "}");
+                ",\"step\":" + String(ALERT_STEP_SECONDS / 60) + (test ? ",\"test\":true}" : "}");
   int code = http.POST(json);
   String resp = code > 0 ? http.getString() : "";
   http.end();
