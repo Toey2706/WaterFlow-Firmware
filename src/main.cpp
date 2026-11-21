@@ -56,7 +56,7 @@ void setLed(bool r, bool g, bool b) {
   ledWrite(PIN_LED_B, b);
 }
 
-int sendAlert(uint32_t minutes, float lpm, float liters, bool test) {
+int sendAlert(uint32_t seconds, float lpm, float liters, bool test) {
   if (WiFi.status() != WL_CONNECTED) return 0;
   WiFiClientSecure tls;
   tls.setInsecure();
@@ -64,13 +64,13 @@ int sendAlert(uint32_t minutes, float lpm, float liters, bool test) {
   if (!http.begin(tls, ALERT_URL)) return 0;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-key", WATER_DEVICE_KEY);
-  String json = "{\"room\":\"" + String(DEVICE_ROOM) + "\",\"minutes\":" + String(minutes) +
+  String json = "{\"room\":\"" + String(DEVICE_ROOM) + "\",\"minutes\":" + String(seconds / 60.0, 1) +
                 ",\"flow_lpm\":" + String(lpm, 2) + ",\"total_l\":" + String(liters, 1) +
-                ",\"step\":" + String(ALERT_STEP_SECONDS / 60) + (test ? ",\"test\":true}" : "}");
+                ",\"step\":" + String(ALERT_STEP_SECONDS / 60.0, 1) + (test ? ",\"test\":true}" : "}");
   int code = http.POST(json);
   String resp = code > 0 ? http.getString() : "";
   http.end();
-  out("แจ้งเตือนน้ำ " + String(minutes) + " นาที: HTTP " + String(code) + (resp.indexOf("\"skipped\":true") >= 0 ? " (ยังไม่ถึงเวลาที่ตั้งไว้)" : ""));
+  out("แจ้งเตือนน้ำ " + String(seconds) + " วินาที: HTTP " + String(code) + (resp.indexOf("\"skipped\":true") >= 0 ? " (ยังไม่ถึงเวลาที่ตั้งไว้)" : ""));
   return code;
 }
 
@@ -243,10 +243,10 @@ void loop() {
     nextAlertAt = ALERT_STEP_SECONDS;
   }
   bool leak = flowSeconds >= LEAK_SECONDS;
-  if (flowSeconds >= nextAlertAt && sendAlert(nextAlertAt / 60, lpm, liters, false) > 0) nextAlertAt += ALERT_STEP_SECONDS;
+  if (flowSeconds >= nextAlertAt && sendAlert(nextAlertAt, lpm, liters, false) > 0) nextAlertAt += ALERT_STEP_SECONDS;
   if (testAlertPending) {
     testAlertPending = false;
-    sendAlert(flowSeconds / 60, lpm, liters, true);
+    sendAlert(flowSeconds, lpm, liters, true);
   }
 
   setLed(leak, n > 0 && !leak, n == 0);
